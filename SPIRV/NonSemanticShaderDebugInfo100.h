@@ -83,6 +83,9 @@ enum NonSemanticShaderDebugInfo100Instructions {
     NonSemanticShaderDebugInfo100DebugStoragePath = 106,
     NonSemanticShaderDebugInfo100DebugEntryPoint = 107,
     NonSemanticShaderDebugInfo100DebugTypeMatrix = 108,
+    NonSemanticShaderDebugInfo100DebugTypeCooperativeVectorNV = 109,
+    NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixNV = 110,
+    NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixKHR = 111,
     NonSemanticShaderDebugInfo100InstructionsMax = 0x7fffffff
 };
 

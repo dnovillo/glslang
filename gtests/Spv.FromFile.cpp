@@ -286,6 +286,9 @@ TEST_P(GlslNonSemanticShaderDebugInfoSpirv13Test, FromFile)
                             "/baseResults/", false, true, true);
 }
 
+// Allow uninstantiated test suite - tests moved to SpvDebugInfoTest.cpp (pattern-based)
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(GlslNonSemanticShaderDebugInfoSpirv13Test);
+
 TEST_P(GlslNonSemanticShaderDebugInfoVulkanLatestTest, FromFile)
 {
     loadFileCompileAndCheck(GlobalTestSettings.testRoot, GetParam(), Source::GLSL, Semantics::Vulkan,
@@ -1151,13 +1154,9 @@ INSTANTIATE_TEST_SUITE_P(
     FileNameAsCustomTestSuffix
 );
 
-INSTANTIATE_TEST_SUITE_P(
-    Glsl, GlslNonSemanticShaderDebugInfoSpirv13Test,
-    ::testing::ValuesIn(std::vector<std::string>({
-        "spv.debuginfo.coopmatKHR.comp",
-    })),
-    FileNameAsCustomTestSuffix
-);
+// Cooperative matrix/vector debug info tests moved to SpvDebugInfoTest.cpp (pattern-based tests)
+// This avoids golden output maintenance issues
+// GlslNonSemanticShaderDebugInfoSpirv13Test is now unused and can be removed if no other tests use it
 
 INSTANTIATE_TEST_SUITE_P(
     Glsl, GlslNonSemanticShaderDebugInfoVulkanLatestTest,

@@ -578,40 +578,8 @@ Id Builder::makeCooperativeMatrixTypeKHR(Id component, Id scope, Id rows, Id col
     constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
     module.mapInstruction(type);
 
-    if (emitNonSemanticShaderDebugInfo)
-    {
-        // Find a name for one of the parameters. It can either come from debuginfo for another
-        // type, or an OpName from a constant.
-        auto const findName = [&](Id id) {
-            Id id2 = getDebugType(id);
-            for (auto &t : groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeBasic]) {
-                if (t->getResultId() == id2) {
-                    for (auto &s : strings) {
-                        if (s->getResultId() == t->getIdOperand(2)) {
-                            return s->getNameString();
-                        }
-                    }
-                }
-            }
-            for (auto &t : names) {
-                if (t->getIdOperand(0) == id) {
-                    return t->getNameString();
-                }
-            }
-            return "unknown";
-        };
-        std::string debugName = "coopmat<";
-        debugName += std::string(findName(component)) + ", ";
-        if (isConstantScalar(scope)) {
-            debugName += std::string("gl_Scope") + std::string(spv::ScopeToString((spv::Scope)getConstantScalar(scope))) + ", ";
-        } else {
-            debugName += std::string(findName(scope)) + ", ";
-        }
-        debugName += std::string(findName(rows)) + ", ";
-        debugName += std::string(findName(cols)) + ">";
-        // There's no nonsemantic debug info instruction for cooperative matrix types,
-        // use opaque composite instead.
-        auto const debugResultId = makeOpaqueDebugType(debugName.c_str());
+    if (emitNonSemanticShaderDebugInfo) {
+        auto debugResultId = makeCooperativeMatrixDebugTypeKHR(component, scope, rows, cols, use);
         debugTypeIdLookup[type->getResultId()] = debugResultId;
     }
 
@@ -639,6 +607,11 @@ Id Builder::makeCooperativeMatrixTypeNV(Id component, Id scope, Id rows, Id cols
     groupedTypes[enumCast(Op::OpTypeCooperativeMatrixNV)].push_back(type);
     constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
     module.mapInstruction(type);
+
+    if (emitNonSemanticShaderDebugInfo) {
+        auto debugResultId = makeCooperativeMatrixDebugTypeNV(component, scope, rows, cols);
+        debugTypeIdLookup[type->getResultId()] = debugResultId;
+    }
 
     return type->getResultId();
 }
@@ -672,6 +645,11 @@ Id Builder::makeCooperativeVectorTypeNV(Id componentType, Id components)
     groupedTypes[enumCast(Op::OpTypeCooperativeVectorNV)].push_back(type);
     constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
     module.mapInstruction(type);
+
+    if (emitNonSemanticShaderDebugInfo) {
+        auto debugResultId = makeCooperativeVectorDebugTypeNV(componentType, components);
+        debugTypeIdLookup[type->getResultId()] = debugResultId;
+    }
 
     return type->getResultId();
 }
@@ -1065,7 +1043,7 @@ Id Builder::makeIntegerDebugType(int const width, bool const hasSign)
     return type->getResultId();
 }
 
-Id Builder::makeFloatDebugType(int const width)
+Id Builder::makeFloatDebugType(int const width, Id const fpEncoding)
 {
     const char* typeName = nullptr;
     switch (width) {
@@ -1080,19 +1058,32 @@ Id Builder::makeFloatDebugType(int const width)
         type = groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeBasic][t];
         if (type->getIdOperand(0) == nameId &&
             type->getIdOperand(1) == static_cast<unsigned int>(width) &&
-            type->getIdOperand(2) == NonSemanticShaderDebugInfo100Float)
-            return type->getResultId();
+            type->getIdOperand(2) == NonSemanticShaderDebugInfo100Float) {
+            // Check fpEncoding match - if fpEncoding is specified, operand 4 must match
+            if (fpEncoding == NoType) {
+                // No encoding specified - match entries without optional operand (4 operands total)
+                if (type->getNumOperands() == 4)
+                    return type->getResultId();
+            } else {
+                // Encoding specified - match entries with matching encoding (5 operands total)
+                if (type->getNumOperands() == 5 && type->getIdOperand(4) == fpEncoding)
+                    return type->getResultId();
+            }
+        }
     }
 
     // not found, make it
     type = new Instruction(getUniqueId(), makeVoidType(), Op::OpExtInst);
-    type->reserveOperands(6);
+    type->reserveOperands(fpEncoding == NoType ? 6 : 7);
     type->addIdOperand(nonSemanticShaderDebugInfo);
     type->addImmediateOperand(NonSemanticShaderDebugInfo100DebugTypeBasic);
     type->addIdOperand(nameId); // name id
     type->addIdOperand(makeUintConstant(width)); // size id
     type->addIdOperand(makeUintConstant(NonSemanticShaderDebugInfo100Float)); // encoding id
     type->addIdOperand(makeUintConstant(NonSemanticShaderDebugInfo100None)); // flags id
+    if (fpEncoding != NoType) {
+        type->addIdOperand(fpEncoding); // optional FPEncoding id
+    }
 
     groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeBasic].push_back(type);
     constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
@@ -1161,6 +1152,94 @@ Id Builder::makeMatrixDebugType(Id const vectorType, int const vectorCount, bool
     type->addIdOperand(makeBoolConstant(columnMajor)); // column-major id
 
     groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeMatrix].push_back(type);
+    constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
+    module.mapInstruction(type);
+
+    return type->getResultId();
+}
+
+Id Builder::makeCooperativeVectorDebugTypeNV(Id componentType, Id componentCount)
+{
+    // try to find it
+    Instruction* type;
+    for (int t = 0; t < (int)groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeVectorNV].size(); ++t) {
+        type = groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeVectorNV][t];
+        if (type->getIdOperand(0) == componentType &&
+            type->getIdOperand(1) == componentCount)
+            return type->getResultId();
+    }
+
+    // not found, make it
+    type = new Instruction(getUniqueId(), makeVoidType(), Op::OpExtInst);
+    type->reserveOperands(4);
+    type->addIdOperand(nonSemanticShaderDebugInfo);
+    type->addImmediateOperand(NonSemanticShaderDebugInfo100DebugTypeCooperativeVectorNV);
+    type->addIdOperand(getDebugType(componentType)); // component debug type
+    type->addIdOperand(componentCount); // component count
+
+    groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeVectorNV].push_back(type);
+    constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
+    module.mapInstruction(type);
+
+    return type->getResultId();
+}
+
+Id Builder::makeCooperativeMatrixDebugTypeNV(Id componentType, Id scope, Id rows, Id cols)
+{
+    // try to find it
+    Instruction* type;
+    for (int t = 0; t < (int)groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixNV].size(); ++t) {
+        type = groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixNV][t];
+        if (type->getIdOperand(0) == componentType &&
+            type->getIdOperand(1) == scope &&
+            type->getIdOperand(2) == rows &&
+            type->getIdOperand(3) == cols)
+            return type->getResultId();
+    }
+
+    // not found, make it
+    type = new Instruction(getUniqueId(), makeVoidType(), Op::OpExtInst);
+    type->reserveOperands(6);
+    type->addIdOperand(nonSemanticShaderDebugInfo);
+    type->addImmediateOperand(NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixNV);
+    type->addIdOperand(getDebugType(componentType)); // component debug type
+    type->addIdOperand(scope); // scope
+    type->addIdOperand(rows); // rows
+    type->addIdOperand(cols); // columns
+
+    groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixNV].push_back(type);
+    constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
+    module.mapInstruction(type);
+
+    return type->getResultId();
+}
+
+Id Builder::makeCooperativeMatrixDebugTypeKHR(Id componentType, Id scope, Id rows, Id cols, Id use)
+{
+    // try to find it
+    Instruction* type;
+    for (int t = 0; t < (int)groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixKHR].size(); ++t) {
+        type = groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixKHR][t];
+        if (type->getIdOperand(0) == componentType &&
+            type->getIdOperand(1) == scope &&
+            type->getIdOperand(2) == rows &&
+            type->getIdOperand(3) == cols &&
+            type->getIdOperand(4) == use)
+            return type->getResultId();
+    }
+
+    // not found, make it
+    type = new Instruction(getUniqueId(), makeVoidType(), Op::OpExtInst);
+    type->reserveOperands(7);
+    type->addIdOperand(nonSemanticShaderDebugInfo);
+    type->addImmediateOperand(NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixKHR);
+    type->addIdOperand(getDebugType(componentType)); // component debug type
+    type->addIdOperand(scope); // scope
+    type->addIdOperand(rows); // rows
+    type->addIdOperand(cols); // columns
+    type->addIdOperand(use); // use (MatrixA, MatrixB, Accumulator)
+
+    groupedDebugTypes[NonSemanticShaderDebugInfo100DebugTypeCooperativeMatrixKHR].push_back(type);
     constantsTypesGlobals.push_back(std::unique_ptr<Instruction>(type));
     module.mapInstruction(type);
 

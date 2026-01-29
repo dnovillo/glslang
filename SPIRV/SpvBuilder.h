@@ -260,7 +260,7 @@ public:
     Id makeDebugInfoNone();
     Id makeBoolDebugType(int const size);
     Id makeIntegerDebugType(int const width, bool const hasSign);
-    Id makeFloatDebugType(int const width);
+    Id makeFloatDebugType(int const width, Id const fpEncoding = NoType);
     Id makeSequentialDebugType(Id const baseType, Id const componentCount, NonSemanticShaderDebugInfo100Instructions const sequenceType);
     Id makeArrayDebugType(Id const baseType, Id const componentCount);
     Id makeVectorDebugType(Id const baseType, int const componentCount);
@@ -269,6 +269,9 @@ public:
     Id makeCompositeDebugType(std::vector<Id> const& memberTypes, std::vector<StructMemberDebugInfo> const& memberDebugInfo,
                               char const* const name, NonSemanticShaderDebugInfo100DebugCompositeType const tag);
     Id makeOpaqueDebugType(char const* const name);
+    Id makeCooperativeVectorDebugTypeNV(Id componentType, Id componentCount);
+    Id makeCooperativeMatrixDebugTypeNV(Id componentType, Id scope, Id rows, Id cols);
+    Id makeCooperativeMatrixDebugTypeKHR(Id componentType, Id scope, Id rows, Id cols, Id use);
     Id makePointerDebugType(StorageClass storageClass, Id const baseType);
     Id makeForwardPointerDebugType(StorageClass storageClass);
     Id makeDebugSource(const Id fileName);
