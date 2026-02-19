@@ -5,14 +5,14 @@
       "site" : "github",
       "subrepo" : "dnovillo/SPIRV-Tools",
       "subdir" : "External/spirv-tools",
-      "commit": "5b51ae9d5d8e7c01d1977d34c88e5983d378ad42"
+      "commit": "71d817d01b6997ef9d02f073db170d4eb14afe2d"
     },
     {
       "name" : "spirv-tools/external/spirv-headers",
       "site" : "github",
       "subrepo" : "dnovillo/SPIRV-Headers",
       "subdir" : "External/spirv-tools/external/spirv-headers",
-      "commit" : "04e9b0fec75803c6ccb4c5ba2c018665af250dbd"
+      "commit" : "ceff39bc66aad20fa413ede4e9d30a032cb4aca7"
     },
     {
       "name": "googletest",
