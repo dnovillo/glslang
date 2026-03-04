@@ -342,4 +342,52 @@ TEST_F(SpvDebugInfoTest, CooperativeMatrixKHRWithSpecConstantsGeneratesDebugType
         << spirv;
 }
 
+// Test 6: Cooperative matrix NV with specialization constants should generate debug types.
+TEST_F(SpvDebugInfoTest, CooperativeMatrixNVWithSpecConstantsGeneratesDebugType)
+{
+    const std::string shaderSource = R"(
+        #version 450 core
+        #extension GL_KHR_memory_scope_semantics : enable
+        #extension GL_NV_cooperative_matrix : enable
+        #extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+        layout (local_size_x = 32) in;
+
+        layout(constant_id = 0) const uint ROWS = 16;
+        layout(constant_id = 1) const uint COLS = 8;
+
+        layout(set = 0, binding = 0) coherent buffer Block {
+            float16_t data[];
+        } block;
+
+        void main()
+        {
+            // Use specialization constants for matrix dimensions.
+            fcoopmatNV<16, gl_ScopeSubgroup, ROWS, COLS> mat =
+                fcoopmatNV<16, gl_ScopeSubgroup, ROWS, COLS>(0.0);
+            mat = mat + mat;
+            coopMatStoreNV(mat, block.data, 0, COLS, false);
+        }
+    )";
+
+    std::string spirv = compileShaderToSpirvWithDebugInfo(shaderSource, EShLangCompute);
+
+    // Verify debug info extension is imported.
+    EXPECT_TRUE(containsDebugInfoExtension(spirv))
+        << "SPIR-V should contain NonSemantic.Shader.DebugInfo.100 extension.\n";
+
+    // Verify cooperative matrix types are generated.
+    EXPECT_TRUE(containsTypeCooperativeMatrixNV(spirv))
+        << "SPIR-V should contain TypeCooperativeMatrixNV.\n"
+        << "Generated SPIR-V:\n"
+        << spirv;
+
+    // Debug types should be generated even with specialization constants.
+    // The spec allows any "constant instruction" including OpSpecConstant.
+    EXPECT_TRUE(containsDebugTypeCooperativeMatrixNV(spirv))
+        << "SPIR-V should contain DebugTypeCooperativeMatrixNV (instruction 110) even when using specialization constants.\n"
+        << "Generated SPIR-V:\n"
+        << spirv;
+}
+
 } // namespace glslangtest
